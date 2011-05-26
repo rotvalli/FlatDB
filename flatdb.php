@@ -103,14 +103,16 @@ class FlatDB {
         $this->rows = count($data) - 1;
 
         for ($r = 1; $r < $this->rows + 1; $r++) {
-            $db[] = explode("|", trim($data[$r]));
+            $db[] = array_map($this->unescape, explode("|", trim($data[$r])));
         }
 
         $this->db = $db;
     }
-
+    
     public function add_record($new_record) {
 
+        $new_record = array_map($this->escape, $new_record);
+        
         $db_file_row = implode("|", $new_record) . "\n";
 
         $db_file = fopen($this->filename, "a");
@@ -127,12 +129,14 @@ class FlatDB {
 
     public function modify_record($row, $column, $new_data) {
 
-        $this->db[$row][$column] = $new_data;
+        $this->db[$row][$column] = $this->escape($new_data);
+        
+        $db_file_rows = array();
 
         $db_file_rows = implode("|", $this->column_names) . "\n";
 
         for ($r = 0; $r < $this->rows; $r++) {
-            $db_file_rows += implode("|", $this->db($r)) . "\n";
+            $db_file_rows .= implode("|", $this->db($r)) . "\n";
         }
 
         $db_file = fopen($this->filename, "w");
@@ -165,6 +169,24 @@ class FlatDB {
         fclose($db_file);
 
         return true;
+    }
+    
+    
+    private function escape($value){
+        
+        $value = str_replace("\r\n", "\n", $value);
+        $value = str_replace("\n", "<br/>", $value);
+        $value = str_replace("|", "&#124;", $value);
+                
+        return $value;
+    }
+    
+    private function unescape($value){
+        
+        $value = str_replace("<br/>", "\n", $value);
+        $value = str_replace("&#124;", "|", $value);
+                
+        return $value;
     }
 
     public function __construct($filename) {
