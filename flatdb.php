@@ -32,30 +32,36 @@
 class FlatDB {
 
     /**
-     * Absolute file path
+     * Absolute file path.
      */
     private $filename = "";
     
     /**
-     * Rows in database
+     * Rows in database.
      */
     private $rows = 0;
 
     /**
-     * Columns in database row
+     * Columns in database row.
      */
     private $columns = 0;
 
     /**
-     * List of column names
+     * List of column names.
      */
     private $column_names = array();
 
     /**
-     * Database instance loaded in memory
+     * Database instance loaded in memory.
      */
     private $db = array();
 
+    /**
+     * Getter for database. Without arguments returns everything.
+     * @param integer $row database row
+     * @param integer $column database column
+     * @return array|string
+     */
     public function db($row=-1, &$column=-1) {
         if ($row != -1 && $column != -1) {
             return $this->db[$row][$column];
@@ -66,18 +72,33 @@ class FlatDB {
         }
     }
 
+    /**
+     * Getter for database row count.
+     * @return integer
+     */
     public function rows() {
         return $this->rows;
     }
 
+    /**
+     * Getter for database column count.
+     * @return integer
+     */
     public function columns() {
         return $this->columns;
     }
 
+    /**
+     * Getter for database column names.
+     * @return array
+     */
     public function column_names($column) {
         return $this->column_names[$column];
     }
 
+    /**
+     * Method for reading database from file to memory.
+     */
     public function fetch() {
 
         if ($this->filename == "") {
@@ -103,16 +124,20 @@ class FlatDB {
         $this->rows = count($data) - 1;
 
         for ($r = 1; $r < $this->rows + 1; $r++) {
-            $db[] = array_map($this->unescape, explode("|", trim($data[$r])));
+            $db[] = array_map(array(&$this, 'unescape'), explode("|", trim($data[$r])));
         }
 
         $this->db = $db;
     }
     
+    /**
+     * Method to add new record to database.
+     * @param integer $new_record array of column values for new row
+     * @return boolean
+     */
     public function add_record($new_record) {
 
-        $new_record = array_map($this->escape, $new_record);
-        
+        $new_record = array_map(array(&$this, 'escape'), $new_record);
         $db_file_row = implode("|", $new_record) . "\n";
 
         $db_file = fopen($this->filename, "a");
@@ -127,6 +152,13 @@ class FlatDB {
         return true;
     }
 
+    /**
+     * Method to modify record to database.
+     * @param integer $row database row number
+     * @param integer $column database column number
+     * @param string $new_data new column data
+     * @return boolean
+     */
     public function modify_record($row, $column, $new_data) {
 
         $this->db[$row][$column] = $this->escape($new_data);
@@ -150,6 +182,11 @@ class FlatDB {
         return true;
     }
 
+    /**
+     * Method to remove record from database.
+     * @param integer $row database row number
+     * @return boolean
+     */
     public function remove_record($row) {
 
         $db_file_rows = implode("|", $this->column_names) . "\n";
@@ -172,15 +209,25 @@ class FlatDB {
     }
     
     
+    /**
+     * String escape method.
+     * @param string $value data to escape
+     * @return string
+     */
     private function escape($value){
         
         $value = str_replace("\r\n", "\n", $value);
         $value = str_replace("\n", "<br/>", $value);
         $value = str_replace("|", "&#124;", $value);
-                
+        
         return $value;
     }
     
+    /**
+     * String unescape method.
+     * @param string $value data to unescape
+     * @return string
+     */
     private function unescape($value){
         
         $value = str_replace("<br/>", "\n", $value);
@@ -189,6 +236,10 @@ class FlatDB {
         return $value;
     }
 
+    /**
+     * Default constructor.
+     * @param string $filename database file
+     */
     public function __construct($filename) {
         $this->filename = $filename;
         $this->fetch();
