@@ -3,21 +3,12 @@
 /*
  * Otto Salminen 2011, Public domain
  * 
- * Flat DB to read and modify flat file database
+ * Flat DB to read and modify csv flat file database
  * 
  * 
  * File format
  * ===========
- * Line 0 defines column names. Names are separated by | character and line ends
- * with \n.
- * 
- * name1|name2|name3\n
- * 
- * Following lines are data records. Same rules apply for column separator and 
- * line ending.
- * 
- * column1|column2|column3\n
- * ...
+ * http://en.wikipedia.org/wiki/Comma-separated_values
  * 
  * Data type
  * =========
@@ -35,7 +26,7 @@ class FlatDB {
      * Absolute file path.
      */
     private $filename = "";
-    
+
     /**
      * Rows in database.
      */
@@ -106,14 +97,19 @@ class FlatDB {
             return;
         }
 
+
         if (!($data = file($this->filename))) {
             echo "Cannot open database file\n";
             return;
         }
 
-        $columns = explode("|", trim($data[0]));
-        $this->column_names = $columns;
-        $this->columns = count($columns);
+        if (function_exists("str_getcsv")) {
+            $this->column_names = str_getcsv($data[0]);
+        } else {
+            $this->column_names = explode(",", trim($data[0]));
+        }
+        $this->columns = count($this->column_names);
+
         if (!$this->columns) {
             echo "No columns in database\n";
             return;
@@ -123,13 +119,20 @@ class FlatDB {
         //Rows minus columns row
         $this->rows = count($data) - 1;
 
-        for ($r = 1; $r < $this->rows + 1; $r++) {
-            $db[] = array_map(array(&$this, 'unescape'), explode("|", trim($data[$r])));
+        if (function_exists("str_getcsv")) {
+            for ($r = 1; $r < $this->rows + 1; $r++) {
+                $db[] = array_map(array(&$this, 'unescape'), str_getcsv($data[$r]));
+            }
+        } else {
+
+            for ($r = 1; $r < $this->rows + 1; $r++) {
+                $db[] = array_map(array(&$this, 'unescape'), explode(",", trim($data[$r])));
+            }
         }
 
         $this->db = $db;
     }
-    
+
     /**
      * Method to add new record to database.
      * @param integer $new_record array of column values for new row
@@ -138,22 +141,33 @@ class FlatDB {
     public function add_record($new_record) {
 
         $new_record = array_map(array(&$this, 'escape'), $new_record);
-        $db_file_row = implode("|", $new_record) . "\n";
 
-        $db_file = fopen($this->filename, "a");
-        flock($db_file, LOCK_EX);
-        if (fwrite($db_file, $db_file_row)) {
-            $this->db[] = $new_record;
-            $this->rows++;
+        if (function_exists("str_getcsv")) {
+            $db_file = fopen($this->filename, "a");
+            flock($db_file, LOCK_EX);
+            if (fputcsv($db_file, $new_record)) {
+                $this->db[] = $new_record;
+                $this->rows++;
+            }
+            flock($db_file, LOCK_UN);
+            fclose($db_file);
+        } else {
+            $db_file_row = implode(",", $new_record) . "\n";
+
+            $db_file = fopen($this->filename, "a");
+            flock($db_file, LOCK_EX);
+            if (fwrite($db_file, $db_file_row)) {
+                $this->db[] = $new_record;
+                $this->rows++;
+            }
+            flock($db_file, LOCK_UN);
+            fclose($db_file);
         }
-        flock($db_file, LOCK_UN);
-        fclose($db_file);
-
         return true;
     }
 
     /**
-     * Method to modify record to database.
+     * Modify record in database.
      * @param integer $row database row number
      * @param integer $column database column number
      * @param string $new_data new column data
@@ -162,13 +176,13 @@ class FlatDB {
     public function modify_record($row, $column, $new_data) {
 
         $this->db[$row][$column] = $this->escape($new_data);
-        
+
         $db_file_rows = array();
 
-        $db_file_rows = implode("|", $this->column_names) . "\n";
+        $db_file_rows = implode(",", $this->column_names) . "\n";
 
         for ($r = 0; $r < $this->rows; $r++) {
-            $db_file_rows .= implode("|", $this->db($r)) . "\n";
+            $db_file_rows .= implode(",", $this->db($r)) . "\n";
         }
 
         $db_file = fopen($this->filename, "w");
@@ -183,17 +197,17 @@ class FlatDB {
     }
 
     /**
-     * Method to remove record from database.
+     * Remove record from database.
      * @param integer $row database row number
      * @return boolean
      */
     public function remove_record($row) {
 
-        $db_file_rows = implode("|", $this->column_names) . "\n";
+        $db_file_rows = implode(",", $this->column_names) . "\n";
 
         for ($r = 0; $r < $this->rows; $r++) {
             if ($row != $r) {
-                $db_file_rows .= implode("|", $this->db($r)) . "\n";
+                $db_file_rows .= implode(",", $this->db($r)) . "\n";
             }
         }
 
@@ -207,32 +221,29 @@ class FlatDB {
 
         return true;
     }
-    
-    
+
     /**
      * String escape method.
      * @param string $value data to escape
      * @return string
      */
-    private function escape($value){
-        
+    private function escape($value) {
+
         $value = str_replace("\r\n", "\n", $value);
         $value = str_replace("\n", "<br/>", $value);
-        $value = str_replace("|", "&#124;", $value);
-        
+
         return $value;
     }
-    
+
     /**
      * String unescape method.
      * @param string $value data to unescape
      * @return string
      */
-    private function unescape($value){
-        
+    private function unescape($value) {
+
         $value = str_replace("<br/>", "\n", $value);
-        $value = str_replace("&#124;", "|", $value);
-                
+
         return $value;
     }
 
